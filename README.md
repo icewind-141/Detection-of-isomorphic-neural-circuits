@@ -200,13 +200,13 @@ project/
 ├── best_match_better3.csv        
 ├── best_match_better4.csv        
 ├── best_match_better5.csv        
-├── best_match_best.csv           # Final result
+├── network.csv                   # Final result
 ├── code.py
 ├── check.py
 ├── science.md                    # Scientific summary
 ├── science.pdf                   # Scientific summary
 ├── extend_graph_code.py
-├── transform_best_match_best.csv # Transform final result, for copying to the Codex
+├── transform_network.csv # Transform final result, for copying to the Codex
 ├── data/
 │   ├── a.csv                     # These are the testing input
 │   ├── b.csv
@@ -269,7 +269,7 @@ python extend_graph_code.py --data-dir ./data --best-match best_match_better1.cs
 python extend_graph_code.py --data-dir ./data --best-match best_match_better2.csv --output best_match_better3.csv
 python extend_graph_code.py --data-dir ./data --best-match best_match_better3.csv --output best_match_better4.csv
 python extend_graph_code.py --data-dir ./data --best-match best_match_better4.csv --output best_match_better5.csv
-python extend_graph_code.py --data-dir ./data --best-match best_match_better5.csv --output best_match_best.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better5.csv --output network.csv
 ```
 
 This script repeatedly restarts from randomly selected subsets of the current solution and attempts additional greedy expansions.
@@ -278,7 +278,7 @@ This script repeatedly restarts from randomly selected subsets of the current so
 ### Validate Final Result 
 
 ```bash
-python check.py best_match_best.csv data
+python check.py network.csv data
 ```
 
 A successful validation prints:

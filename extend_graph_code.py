@@ -152,7 +152,7 @@ def main() -> None:
 	parser = argparse.ArgumentParser(description="Expand common subgraph from best_match")
 	parser.add_argument("--data-dir", default="data", help="Directory containing graph CSV files")
 	parser.add_argument("--best-match", default="best_match.csv", help="Input best_match CSV file path")
-	parser.add_argument("--output", default="best_match_best.csv", help="Output CSV file path")
+	parser.add_argument("--output", default="network.csv", help="Output CSV file path")
 	args = parser.parse_args()
 
 	data_dir = args.data_dir
