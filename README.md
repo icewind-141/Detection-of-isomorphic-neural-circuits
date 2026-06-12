@@ -24,9 +24,9 @@ The key idea is that biological neural networks contain a small number of highly
 
 ---
 
-# Technical Strategy
+## Technical Strategy
 
-## Biological Motivation
+### Biological Motivation
 
 Unlike random graphs, connectomes exhibit strong degree heterogeneity:
 
@@ -41,23 +41,23 @@ This dramatically reduces the search space while increasing the probability of f
 
 ---
 
-# Assumptions
+## Assumptions
 
 The algorithm relies on the following assumptions:
 
-### 1. Structural Consistency
+#### 1. Structural Consistency
 
 The target subgraph preserves adjacency relationships across datasets.
 
 Specifically, if two matched neurons are connected in one graph, the corresponding matched neurons must exhibit the same directed connectivity pattern in the other graphs.
 
-### 2. Hub Preservation
+#### 2. Hub Preservation
 
 Highly connected neurons tend to remain highly connected across related connectomes.
 
 Therefore degree information can be used as a heuristic for discovering initial alignments.
 
-### 3. Local Expansion Validity
+#### 3. Local Expansion Validity
 
 Once a small set of correct alignments is found, neighboring neurons are more likely to have corresponding matches nearby.
 
@@ -65,9 +65,9 @@ This allows the search to expand outward from an aligned core.
 
 ---
 
-# Methodology
+## Methodology
 
-## Stage 0: Graph Preprocessing
+### Stage 0: Graph Preprocessing
 
 For each dataset:
 
@@ -83,11 +83,11 @@ for every neuron.
 
 * Store original neuron identifiers for output.
 
----
 
-## Stage 1: Hub-Based Seed Alignment
 
-### Step 1.1: Select Candidate Hub Neurons
+### Stage 1: Hub-Based Seed Alignment
+
+#### Step 1.1: Select Candidate Hub Neurons
 
 For each graph:
 
@@ -96,7 +96,7 @@ For each graph:
 
 These Top-100 neurons form a compact induced subgraph that retains much of the graph's distinctive structure while reducing the search space by several orders of magnitude.
 
-### Why Top-100?
+#### Why Top-100?
 
 Searching directly over all neurons would generate an enormous number of possible alignments.
 
@@ -106,9 +106,9 @@ Instead, we exploit a connectome-specific property:
 
 Restricting the search to the Top-100 hubs substantially increases the probability of discovering genuine alignments rather than accidental graph isomorphisms.
 
----
 
-### Step 1.2: Randomized Core Search
+
+#### Step 1.2: Randomized Core Search
 
 For each triple of datasets:
 
@@ -122,9 +122,9 @@ The largest aligned structure found becomes the **seed core**.
 
 The objective of this stage is not to obtain the final answer, but rather to identify several highly reliable aligned neurons that can serve as anchors for later expansion.
 
----
 
-## Stage 2: Global Expansion
+
+### Stage 2: Global Expansion
 
 Starting from the aligned core:
 
@@ -136,9 +136,9 @@ Starting from the aligned core:
 
 This stage expands the search from a small trusted core into the full graph.
 
----
 
-## Graph Matching Heuristic
+
+### Graph Matching Heuristic
 
 To accelerate candidate generation, each boundary neuron is represented by a connectivity signature describing its relationships to already matched neurons:
 
@@ -153,9 +153,9 @@ Only candidates with matching signatures are compared directly.
 
 This reduces the number of expensive exact consistency checks.
 
----
 
-## Randomized Search Strategy
+
+### Randomized Search Strategy
 
 The search is intentionally randomized.
 
@@ -170,12 +170,12 @@ Multiple independent runs are performed, and the largest discovered subgraph is 
 
 ---
 
-# Heuristics Used
+## Heuristics Used
 
 The algorithm employs several heuristics:
 
 | Heuristic                         | Purpose                                 |
-| --------------------------------- | --------------------------------------- |
+|  |  |
 | Top-100 hub filtering             | Reduce search space dramatically        |
 | Degree similarity matching        | Generate plausible initial alignments   |
 | Random restarts                   | Escape local optima                     |
@@ -187,15 +187,13 @@ These heuristics sacrifice theoretical optimality in exchange for practical scal
 
 ---
 
-# Reproducing Results
+## Reproducing Results
 
-## Directory Structure
+### Directory Structure
 
 ```text
 project/
-├── code.py
-├── extend_graph_code.py
-├── check.py
+├── .gitattributes
 ├── best_match.csv                # Preliminary results
 ├── best_match_better1.csv        # Intermediate results (for expansion purposes)
 ├── best_match_better2.csv        
@@ -203,8 +201,12 @@ project/
 ├── best_match_better4.csv        
 ├── best_match_better5.csv        
 ├── best_match_best.csv           # Final result
+├── code.py
+├── check.py
+├── science.md                    # Scientific summary
+├── science.pdf                   # Scientific summary
+├── extend_graph_code.py
 ├── transform_best_match_best.csv # Transform final result, for copying to the Codex
-├── .gitattributes
 ├── data/
 │   ├── a.csv                     # These are the testing input
 │   ├── b.csv
@@ -216,6 +218,7 @@ project/
 │   ├── manc_1.2.1_edge_list.csv
 │   ├── maol_1.1_edge_list.csv
 │   └── mcns_0.9_edge_list.csv
+├── docs/                         # Figures for the scientific summary
 ├── matches/
 │   ├── banc_626_edge_list__fafb_783_edge_list__manc_1.2.1_edge_list.csv    # These are the core matching neurons under those three dataset in the filename
 │   ├── banc_626_edge_list__fafb_783_edge_list__maol_1.1_edge_list.csv
@@ -230,17 +233,17 @@ project/
 └── README.md
 ```
 
----
 
-## Run Main Search
+
+### Run Main Search
 
 ```bash
 python code.py
 ```
 
----
 
-## Validate Result
+
+### Validate Result
 
 ```bash
 python check.py best_match.csv data
@@ -254,9 +257,9 @@ yes
 
 indicating that all matched triplets satisfy edge-consistency constraints.
 
----
 
-## Optional Post-Expansion
+
+### Optional Post-Expansion
 
 To further enlarge a discovered subgraph:
 
@@ -271,17 +274,31 @@ python extend_graph_code.py --data-dir ./data --best-match best_match_better5.cs
 
 This script repeatedly restarts from randomly selected subsets of the current solution and attempts additional greedy expansions.
 
+
+### Validate Final Result 
+
+```bash
+python check.py best_match_best.csv data
+```
+
+A successful validation prints:
+
+```text
+yes
+```
+
+indicating that all matched triplets satisfy edge-consistency constraints.
+
 ---
+## Computational Complexity
 
-# Computational Complexity
-
-### Stage 1
+#### Stage 1
 
 Search is restricted to Top-100 hub neurons.
 
 This dramatically reduces complexity and typically completes within minutes.
 
-### Stage 2
+#### Stage 2
 
 Expansion cost depends primarily on:
 
@@ -293,7 +310,7 @@ Typical runtime ranges from minutes to hours depending on parameter settings.
 
 ---
 
-# Summary
+## Summary
 
 The central idea of this work is:
 
