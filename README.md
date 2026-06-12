@@ -1,9 +1,3 @@
-下面这个版本更符合 README 的标准写法，也更贴合比赛/作业要求（**技术策略、启发式方法、假设条件、复现实验步骤**）。同时我已经把你新增的“利用 hub 节点进行对齐种子搜索”的核心思想融入到了 Methodology 部分，并强化了其生物学动机。
-
-建议直接替换原 README 开头部分，并保留后面的参数说明和运行指南。
-
----
-
 # Weakly Connected Common Subgraph Search Across Multiple Connectomes
 
 ## Overview
