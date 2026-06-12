@@ -681,29 +681,29 @@ def run_degree_greedy_search_for_triplet(
 
 def main() -> None:
 	parser = argparse.ArgumentParser(description="Two-stage approximate common induced subgraph search on 5 directed graphs")
-	parser.add_argument("--data-dir", default="data", help="目录，包含 a.csv,b.csv,c.csv,d.csv,e.csv")
-	# parser.add_argument("--graphs", default="a,b,c,d,e", help="参与搜索的图名，逗号分隔")
-	parser.add_argument("--graphs", default="banc_626_edge_list,fafb_783_edge_list,manc_1.2.1_edge_list,maol_1.1_edge_list,mcns_0.9_edge_list", help="参与搜索的图名，逗号分隔")
-	parser.add_argument("--seed-count", type=int, default=100, help="图1中用于起点扫描的高度数节点数量")
-	parser.add_argument("--seed-limit", type=int, default=1, help="保留用于实际扩展的种子数")
-	parser.add_argument("--pair-sample-limit", type=int, default=100, help="每个起点生成候选时每侧最多保留的节点数")
-	parser.add_argument("--top-k", type=int, default=100, help="每图中选取Top-K高频度节点用于核心搜索")
-	parser.add_argument("--R1", type=int, default=1000, help="第一阶段随机贪心重复次数")
-	parser.add_argument("--R2", type=int, default=100, help="第二阶段每个Core的扩展重复次数")
-	parser.add_argument("--L", type=int, default=200, help="每轮候选边界在每图的最大考虑节点数")
-	parser.add_argument("--boundary-limit", type=int, default=30, help="每轮扩展保留的边界节点上限")
-	parser.add_argument("--target-size", type=int, default=100, help="达到该规模后停止当前种子")
-	parser.add_argument("--max-steps", type=int, default=200, help="每个种子的最大扩展步数")
-	parser.add_argument("--seed-time-limit", type=float, default=10.0, help="每个种子的时间上限（秒）")
-	parser.add_argument("--random-extra", type=int, default=100, help="额外随机种子数量")
-	parser.add_argument("--seed", type=int, default=42, help="随机种子")
-	parser.add_argument("--output-dir", default="matches", help="每个三图组结果的输出目录")
-	parser.add_argument("--best-output", default="best_match.csv", help="最佳结果的汇总CSV路径")
+	parser.add_argument("--data-dir", default="data", help="Directory containing a.csv,b.csv,c.csv,d.csv,e.csv")
+	# parser.add_argument("--graphs", default="a,b,c,d,e", help="Graph names to search, comma separated")
+	parser.add_argument("--graphs", default="banc_626_edge_list,fafb_783_edge_list,manc_1.2.1_edge_list,maol_1.1_edge_list,mcns_0.9_edge_list", help="Graph names to search, comma separated")
+	parser.add_argument("--seed-count", type=int, default=100, help="Number of high-degree nodes in graph 1 for seed scanning")
+	parser.add_argument("--seed-limit", type=int, default=1, help="Number of seeds to keep for actual expansion")
+	parser.add_argument("--pair-sample-limit", type=int, default=100, help="Maximum nodes kept per side when generating candidates for each start node")
+	parser.add_argument("--top-k", type=int, default=100, help="Select top-K high-frequency nodes in each graph for core search")
+	parser.add_argument("--R1", type=int, default=1000, help="Number of random greedy repeats in first stage")
+	parser.add_argument("--R2", type=int, default=100, help="Number of expansion repeats per core in second stage")
+	parser.add_argument("--L", type=int, default=200, help="Maximum number of boundary nodes considered per graph per round")
+	parser.add_argument("--boundary-limit", type=int, default=30, help="Upper limit of boundary nodes kept per expansion")
+	parser.add_argument("--target-size", type=int, default=100, help="Stop current seed when reaching this size")
+	parser.add_argument("--max-steps", type=int, default=200, help="Maximum expansion steps per seed")
+	parser.add_argument("--seed-time-limit", type=float, default=10.0, help="Time limit (seconds) per seed")
+	parser.add_argument("--random-extra", type=int, default=100, help="Number of extra random seeds")
+	parser.add_argument("--seed", type=int, default=42, help="Random seed")
+	parser.add_argument("--output-dir", default="matches", help="Output directory for each triplet result")
+	parser.add_argument("--best-output", default="best_match.csv", help="Path to the aggregated best result CSV")
 	args = parser.parse_args()
 
 	graph_names = [x.strip() for x in args.graphs.split(",") if x.strip()]
 	if len(graph_names) < 3:
-		raise ValueError("至少需要3个图")
+		raise ValueError("At least 3 graphs are required")
 
 	rng = random.Random(args.seed)
 	graphs = load_graphs_from_data(args.data_dir, graph_names)
@@ -746,7 +746,7 @@ def main() -> None:
 			best_triplet = triplet
 
 	if best_triplet is None:
-		raise RuntimeError("未能找到有效三图组合")
+		raise RuntimeError("Failed to find a valid triplet")
 
 	try:
 		save_result_csv(args.best_output, best_triplet, best_match, graphs)

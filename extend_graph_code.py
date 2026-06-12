@@ -1,3 +1,4 @@
+import argparse
 import csv
 import os
 import random
@@ -50,7 +51,7 @@ def read_best_match(path: str) -> Tuple[Tuple[str, str, str], List[Tuple[str, st
 		reader = csv.reader(f)
 		header = next(reader)
 		if header is None or len(header) < 3:
-			raise ValueError("best_match.csv 第一行必须包含三个数据集名称")
+			raise ValueError("first line of best_match.csv must contain three dataset names")
 		names = (header[0].strip(), header[1].strip(), header[2].strip())
 		rows: List[Tuple[str, str, str]] = []
 		for row in reader:
@@ -121,14 +122,14 @@ def try_expand_once(
 		if not valid:
 			break
 
-		# 50%选最好，50%随机选top3，平衡贪心与随机探索
+		# 50% choose best, 50% randomly choose top3, balancing greed and random exploration
 		valid = sorted(
 			valid,
 			key=lambda t: g1.deg.get(t[0], 0) + g2.deg.get(t[1], 0) + g3.deg.get(t[2], 0),
 			reverse=True,
 		)
-		# topk = valid[: min(3, len(valid))]
-		topk = valid[: min(9, len(valid))]
+		topk = valid[: min(3, len(valid))]
+		# topk = valid[: min(9, len(valid))]
 		pick = topk[0] if rng.random() < 0.5 else rng.choice(topk)
 
 		match.append(pick)
@@ -148,13 +149,19 @@ def write_match(path: str, names: Tuple[str, str, str], match: Sequence[Tuple[st
 
 
 def main() -> None:
-	data_dir = "data"
-	best_match_path = "best_match_best.csv"
-	output_path = "best_match_best.csv"
+	parser = argparse.ArgumentParser(description="Expand common subgraph from best_match")
+	parser.add_argument("--data-dir", default="data", help="Directory containing graph CSV files")
+	parser.add_argument("--best-match", default="best_match.csv", help="Input best_match CSV file path")
+	parser.add_argument("--output", default="best_match_best.csv", help="Output CSV file path")
+	args = parser.parse_args()
+
+	data_dir = args.data_dir
+	best_match_path = args.best_match
+	output_path = args.output
 
 	rng = random.Random(42)
 
-	# 按要求先读取5个基础csv
+	# Read the 5 base CSVs as required
 	# base_names = ["a", "b", "c", "d", "e"]
 	base_names = ["banc_626_edge_list", "fafb_783_edge_list", "manc_1.2.1_edge_list", "maol_1.1_edge_list", "mcns_0.9_edge_list"]
 	graphs: Dict[str, Graph] = {}
@@ -165,14 +172,14 @@ def main() -> None:
 
 	names, base_match = read_best_match(best_match_path)
 	if len(base_match) < 5:
-		raise ValueError("best_match.csv 行数不足5，无法抽取5~9个点作为初始子图")
+		raise ValueError("best_match.csv has less than 5 rows, cannot sample 5~9 points as initial subgraph")
 
-	# 根据 best_match 第一行选取相应数据；如未预加载则补充读取
+	# Select corresponding data according to first line of best_match; supplement reading if not preloaded
 	for name in names:
 		if name not in graphs:
 			path = os.path.join(data_dir, f"{name}.csv")
 			if not os.path.exists(path):
-				raise FileNotFoundError(f"找不到图文件: {path}")
+				raise FileNotFoundError(f"cannot find graph file: {path}")
 			graphs[name] = read_graph_csv(path, name)
 
 	g1 = graphs[names[0]]
@@ -181,9 +188,9 @@ def main() -> None:
 
 	best = list(base_match)
 
-	# 外层：每次重新随机选一个5~9点原始子图。
-	# 内层：从该原始子图出发，做30~50次独立随机贪心扩张（每次最多100步），取该种子下最好结果。
-	seed_rounds = 10000
+	# Outer loop: randomly select an original subgraph of 5~9 points each time.
+	# Inner loop: starting from that original subgraph, perform 30~50 independent random greedy expansions (max 100 steps each), take best result for that seed.
+	seed_rounds = 100
 	best_seed_size = 0
 	best_restarts = 0
 

@@ -1,252 +1,308 @@
-我们针对“寻找大小为100~1000的弱连通同构子图（至少三个数据集）”这一任务，设计了一个**两阶段快速算法**，兼顾效率与解的质量。算法不追求全局最优，而是通过预筛选高度数节点构建核心，再结合随机化贪心扩展，确保在可接受时间内找到满足规模的子图。
+下面这个版本更符合 README 的标准写法，也更贴合比赛/作业要求（**技术策略、启发式方法、假设条件、复现实验步骤**）。同时我已经把你新增的“利用 hub 节点进行对齐种子搜索”的核心思想融入到了 Methodology 部分，并强化了其生物学动机。
+
+建议直接替换原 README 开头部分，并保留后面的参数说明和运行指南。
 
 ---
 
-## 算法总览
+# Weakly Connected Common Subgraph Search Across Multiple Connectomes
 
-1. **第一阶段（核心构建）**  
-   在每个数据集中选取总度数最大的100个节点（Top100），仅在这些节点构成的诱导子图上，通过多次随机贪心搜索，快速找到一个较大的公共子图（大小通常在几十），作为扩展的“种子核心”。
+## Overview
 
-2. **第二阶段（随机化贪心扩展）**  
-   以第一阶段得到的核心为基础，在全图范围内不断尝试添加新节点（同时匹配到三个数据集），每次只选择与当前子图边模式完全一致的三元组。采用随机选择候选的策略，多次独立运行，取最大结果，直到达到目标大小（≥100）或迭代次数耗尽。
+This project addresses the task:
 
----
+> **Find a weakly connected common isomorphic subgraph of size 100–1000 shared by at least three connectome datasets.**
 
-## 详细步骤
+Because exact maximum common subgraph search is NP-hard and the datasets contain a very large number of neurons, exhaustive search is computationally infeasible. Our approach therefore focuses on finding **large biologically meaningful common subgraphs efficiently**, rather than guaranteeing global optimality.
 
-### 0. 数据预处理（每个数据集独立）
+The algorithm consists of two stages:
 
-- 读入CSV边列表，建立**出边数组** `out[u]` 和**入边数组** `in[u]`，均排序以便二分查找。
-- 计算每个节点的总度数 `deg[u] = out_degree + in_degree`。
-- 记录每个节点的原始ID（字符串），用于最终输出。
+1. **Hub-based Seed Alignment**
 
-### 1. 第一阶段：从Top100节点中构建核心
+   * Rapidly identify a small set of highly reliable aligned neurons.
+   * Construct an initial common core subgraph.
 
-#### 1.1 选取高度数节点
-- 对每个数据集，按总度数降序取前100个节点，记为 `Top_i`（若节点不足100则全取）。  
-- 提取这些节点的**诱导子图**：只保留两端都属于 `Top_i` 的有向边。由于节点数≤100，边数≤10000，规模极小。
+2. **Greedy Expansion**
 
-#### 1.2 对每一组三个数据集（共10组）执行核心搜索
-- 设三个数据集为 `A, B, C`，对应的Top节点集为 `TA, TB, TC`，诱导子图为 `GA, GB, GC`。
-- 使用**随机贪心**方法，重复 `R1` 次（例如 `R1=1000`）：
-  1. **随机种子**：从 `TA` 中随机选一个节点 `a0`，在 `TB` 中随机选一个度数相近（`|deg(b)-deg(a0)| ≤ max(5, 0.2*deg(a0))`）的节点 `b0`，同样在 `TC` 中选 `c0`。若找不到则重新选 `a0`。得到初始三元组 `(a0,b0,c0)`。
-  2. **贪心扩展**（仅限Top节点内）：
-     - 维护当前匹配集合 `M`，初始为 `{(a0,b0,c0)}`。
-     - 循环：收集当前子图在 `GA, GB, GC` 中的**边界节点**（与子图弱连通且未使用）。对边界中的每个节点，检查它是否能与另两个图中的某个节点形成匹配（要求与当前子图中所有已匹配节点的边方向完全一致）。只要找到任意一个合法的三元组，就立即将其加入 `M`，并继续循环；若找不到则停止。
-     - 注意：此处的扩展仅使用Top节点，因为图小，可以暴力检查所有可能性（复杂度 O(N_core^2 * |Top|) 但 N_core 很小，实际很快）。
-  3. 记录本次得到的子图大小 `|M|`，保存最大的一次结果。
-- 取该组数据集下最大的子图作为 `Core`（包含 `k` 个三元组）。如果 `k ≥ 100`，直接跳到输出。
+   * Expand the aligned core into a larger weakly connected common subgraph.
+   * Continue until no further valid extensions exist or the target size is reached.
 
-### 2. 第二阶段：随机化贪心扩展至全图
-
-基于第一阶段的 `Core`（大小可能为20~50），尝试通过添加全图中的节点扩大子图，目标是达到100以上。
-
-#### 2.1 初始化数据结构
-- 当前匹配集合 `M = Core`（三元组列表）。
-- 对每个数据集 `i`，维护：
-  - 已匹配节点集合 `S_i`（初始为Core中对应列的所有节点）。
-  - 边界集合 `B_i`：与 `S_i` 弱连通（即存在至少一条边，方向任意）且不在 `S_i` 中的节点。初始时，遍历 `S_i` 中每个节点的所有出边和入边邻居，去重后填充 `B_i`。
-
-#### 2.2 一次扩展运行（贪心+随机）
-- 设置最大扩展步数 `MAX_STEPS = 1000`（实际达到100即可停止）。
-- 重复以下步骤直到 `|M| ≥ 100` 或无法扩展：
-  1. 如果 `B1`、`B2`、`B3` 任一为空，则停止。
-  2. **候选生成**：
-     - 为每个边界节点计算一个**连接哈希**：`hash = combine( (match_id, direction) for each neighbor in S_i )`，其中 `direction` 为0（无）、1（出）、2（入）、3（双向）。由于 `|M|` 可能较大（几十到一百），为了提高速度，只考虑那些与 `S_i` 中**至少一条边**相连的节点（因为无边节点很难形成大子图，且哈希计算代价高）。实际上，我们可以只取 `B_i` 中度数最高的前 `L` 个节点（例如 `L=200`），并计算它们的哈希。
-     - 建立从哈希值到节点列表的映射 `hash2nodes_i`。
-  3. **枚举候选三元组**：
-     - 遍历 `B1` 中每个节点 `b1`（按度数降序）：
-       - 获取其哈希 `h1`，在 `hash2nodes_2` 中查找相同哈希的节点集 `C2`，同样得到 `C3`。
-       - 枚举所有 `(b2∈C2, b3∈C3)`：
-         - **完全边一致性验证**：由于哈希可能碰撞，需验证 `b1,b2,b3` 与 `M` 中所有节点的边方向是否严格一致。但为了提高效率，我们只验证与 `b1` 有边连接的 `M` 中的节点（通常很少），如果通过，再验证其余节点（随机采样几个或全部）。实际上，因为哈希已经保证了极大概率一致，我们可以直接信任哈希，仅做少量抽查。为稳妥，仍然全部验证（但 `|M|` 仅几十，代价可接受）。
-         - 如果验证通过，则将此三元组加入 `M`，更新 `S_i` 和 `B_i`（将 `b_i` 的邻居加入边界），并**立即回到步骤1**（深度优先，不继续枚举其他候选）。
-  4. 如果遍历完所有 `b1` 都没有找到候选，则停止。
-- 返回最终 `M` 的大小及匹配列表。
-
-#### 2.3 随机化策略
-- 在步骤2.2的3中，当存在多个合法候选时，不总是取第一个，而是以一定概率随机选择。具体：收集所有通过验证的候选，按它们带来的**总度数增量**（`deg(b1)+deg(b2)+deg(b3)`）排序，然后采用**轮盘赌选择**：概率与增量成正比，或者简单地随机选前3个中的一个。这样可以增加探索多样性。
-- 也可以引入**退火**：早期随机性高，后期逐渐趋于贪心。但为简单，我们采用固定的随机比例（例如50%的概率选择最优，50%随机选一个合法候选）。
-
-#### 2.4 多次独立运行
-- 对于每个数据集组合，重复运行第二阶段 `R2` 次（例如 `R2=100`），每次使用相同的 `Core`（或对 `Core` 进行轻微扰动：随机删除10%的节点），记录最大子图大小。
-- 如果某次运行达到100，立即终止并输出。
-
-### 3. 输出最佳结果
-
-- 在所有数据集组合（10组）及所有运行中，选择子图大小最大的一个（若≥100即可）。
-- 将匹配的三元组列表按行写入CSV文件，第一行为三个数据集的名称，后续每行为对应的神经元ID（原始字符串）。
+The key idea is that biological neural networks contain a small number of highly connected **hub neurons**, which provide strong structural signatures for alignment across datasets.
 
 ---
 
-## 第三阶段：进一步扩张（可选）
+# Technical Strategy
 
-在获得初步结果 `best_match.csv` 后，可选择性地使用 `extend_graph_code.py` 进行进一步扩张，以期获得更大的子图。
+## Biological Motivation
 
-### 3.1 扩张算法流程
+Unlike random graphs, connectomes exhibit strong degree heterogeneity:
 
-- **外层循环**（随机重选原始子图）：  
-  - 每轮随机从 `best_match.csv` 中抽取 `3~9` 个节点作为新的原始子图。  
-  - 执行数轮外层循环（可调整）。
+* Most neurons have relatively few connections.
+* A small number of neurons act as hubs and possess exceptionally large degrees.
 
-- **内层循环**（固定原始子图的多次扩张）：  
-  - 对每个原始子图，执行 `100` 次独立的随机贪心扩张重启（可调整）。  
-  - 每次扩张最多 `100` 步（可调整）。  
-  - 在每一步中，从当前子图的边界节点中随机选取候选，检查边一致性，若通过则添加；否则回溯或停止。
+These hub neurons are highly distinctive. If two neurons both occupy hub positions in different connectomes, they are significantly more likely to correspond to one another than a randomly chosen neuron pair.
 
-- **最优记录**：  
-  - 追踪全局最好结果，每 50 轮输出一次进度与当前最佳大小。  
-  - 最终将全局最好结果输出到 `best_match_best.csv`。
+Therefore, rather than searching over the entire graph immediately, we first restrict attention to a small set of high-degree neurons and attempt to identify reliable alignments among them.
 
-### 3.2 运行命令
-
-```bash
-python extend_graph_code.py
-```
-
-该脚本将：
-1. 读取 `data/` 目录下的所有基础图 CSV 文件。
-2. 读取 `best_match_better5.csv`（或指定的输入文件）。
-3. 按表头自动选择对应的三个数据集。
-4. 执行双层循环扩张。
-5. 输出结果到 `best_match_best.csv`。
+This dramatically reduces the search space while increasing the probability of finding biologically meaningful correspondences.
 
 ---
 
-## 使用指南
+# Assumptions
 
-### 文件结构
+The algorithm relies on the following assumptions:
 
-```
-flywireSummerSchool/
-├── README.md                           # 本文档
-├── code.py                            # 主程序（两阶段算法）
-├── extend_graph_code.py               # 扩张工具（可选）
-├── check.py                           # 校验工具
-├── best_match.csv                     # 初步结果
-├── best_match_better5.csv             # 中间结果（供扩张使用）
-├── best_match_best.csv                # 最终结果
-├── data/                              # 输入数据目录
-│   ├── a.csv
+### 1. Structural Consistency
+
+The target subgraph preserves adjacency relationships across datasets.
+
+Specifically, if two matched neurons are connected in one graph, the corresponding matched neurons must exhibit the same directed connectivity pattern in the other graphs.
+
+### 2. Hub Preservation
+
+Highly connected neurons tend to remain highly connected across related connectomes.
+
+Therefore degree information can be used as a heuristic for discovering initial alignments.
+
+### 3. Local Expansion Validity
+
+Once a small set of correct alignments is found, neighboring neurons are more likely to have corresponding matches nearby.
+
+This allows the search to expand outward from an aligned core.
+
+---
+
+# Methodology
+
+## Stage 0: Graph Preprocessing
+
+For each dataset:
+
+* Read the directed edge list.
+* Build incoming and outgoing adjacency lists.
+* Compute
+
+[
+deg(v)=in_degree(v)+out_degree(v)
+]
+
+for every neuron.
+
+* Store original neuron identifiers for output.
+
+---
+
+## Stage 1: Hub-Based Seed Alignment
+
+### Step 1.1: Select Candidate Hub Neurons
+
+For each graph:
+
+* Rank neurons by total degree.
+* Select the top 100 highest-degree neurons.
+
+These Top-100 neurons form a compact induced subgraph that retains much of the graph's distinctive structure while reducing the search space by several orders of magnitude.
+
+### Why Top-100?
+
+Searching directly over all neurons would generate an enormous number of possible alignments.
+
+Instead, we exploit a connectome-specific property:
+
+> Hub neurons are far more likely to represent true correspondences than randomly selected neurons.
+
+Restricting the search to the Top-100 hubs substantially increases the probability of discovering genuine alignments rather than accidental graph isomorphisms.
+
+---
+
+### Step 1.2: Randomized Core Search
+
+For each triple of datasets:
+
+1. Randomly select a seed neuron from one graph.
+2. Choose neurons with similar degree in the other two graphs.
+3. Form an initial matched triplet.
+4. Greedily add additional triplets whose edge relationships to the current matched set are identical across all three graphs.
+5. Repeat many independent restarts.
+
+The largest aligned structure found becomes the **seed core**.
+
+The objective of this stage is not to obtain the final answer, but rather to identify several highly reliable aligned neurons that can serve as anchors for later expansion.
+
+---
+
+## Stage 2: Global Expansion
+
+Starting from the aligned core:
+
+1. Maintain the matched neuron sets in each graph.
+2. Track boundary neurons adjacent to the current subgraph.
+3. Search for new neuron triplets whose connectivity pattern with the existing matched nodes is identical across all datasets.
+4. Add valid matches and update the boundary.
+5. Repeat until no valid extension exists.
+
+This stage expands the search from a small trusted core into the full graph.
+
+---
+
+## Graph Matching Heuristic
+
+To accelerate candidate generation, each boundary neuron is represented by a connectivity signature describing its relationships to already matched neurons:
+
+* outgoing edge
+* incoming edge
+* bidirectional edge
+* no edge
+
+Neurons sharing the same signature are grouped together.
+
+Only candidates with matching signatures are compared directly.
+
+This reduces the number of expensive exact consistency checks.
+
+---
+
+## Randomized Search Strategy
+
+The search is intentionally randomized.
+
+When multiple valid expansions exist:
+
+* higher-degree candidates are preferred,
+* but random selection is also introduced.
+
+This prevents the algorithm from becoming trapped in poor local optima.
+
+Multiple independent runs are performed, and the largest discovered subgraph is retained.
+
+---
+
+# Heuristics Used
+
+The algorithm employs several heuristics:
+
+| Heuristic                         | Purpose                                 |
+| --------------------------------- | --------------------------------------- |
+| Top-100 hub filtering             | Reduce search space dramatically        |
+| Degree similarity matching        | Generate plausible initial alignments   |
+| Random restarts                   | Escape local optima                     |
+| Connectivity signatures (hashing) | Accelerate candidate generation         |
+| Boundary-only expansion           | Focus search on weakly connected growth |
+| Degree-biased selection           | Favor structurally informative neurons  |
+
+These heuristics sacrifice theoretical optimality in exchange for practical scalability.
+
+---
+
+# Reproducing Results
+
+## Directory Structure
+
+```text
+project/
+├── code.py
+├── extend_graph_code.py
+├── check.py
+├── best_match.csv                # Preliminary results
+├── best_match_better1.csv        # Intermediate results (for expansion purposes)
+├── best_match_better2.csv        
+├── best_match_better3.csv        
+├── best_match_better4.csv        
+├── best_match_better5.csv        
+├── best_match_best.csv           # Final result
+├── transform_best_match_best.csv # Transform final result, for copying to the Codex
+├── .gitattributes
+├── data/
+│   ├── a.csv                     # These are the testing input
 │   ├── b.csv
 │   ├── c.csv
 │   ├── d.csv
-│   └── e.csv
-└── matches/                           # 每个三图组的分别输出
-    ├── a__b__c.csv
-    ├── a__b__d.csv
-    ├── ...
-    └── c__d__e.csv
-```
-
-### 输入数据格式
-
-每个 CSV 文件的格式为：
-```
-source neuron id,target neuron id
-id1,id2
-id1,id3
-...
-```
-
-- 第一行为表头。
-- 后续每行表示一条有向边：从 `source` 指向 `target`。
-- 节点 ID 可为任意字符串（例如数字或神经元名称）。
-
-### 输出数据格式
-
-结果 CSV 文件的格式为：
-```
-dataset_A,dataset_B,dataset_C
-node_a1,node_b1,node_c1
-node_a2,node_b2,node_c2
-...
-```
-
-- 第一行为三个数据集的名称。
-- 后续每行表示一个匹配的三元组。
-- 同一行的三个节点在各自的数据集中形成同构的局部邻接结构。
-
-### 运行主程序
-
-#### 1. 基础运行
-
-```bash
-python code.py --graphs a,b,c,d,e --output-dir matches --best-output best_match.csv
-```
-
-该命令对所有 5 个图的 10 组组合进行搜索，结果分别保存到 `matches/` 目录，并将最大子图保存到 `best_match.csv`。
-
-#### 2. 调整参数
-
-关键参数说明：
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `--graphs` | `banc_626_edge_list,...` | 参与搜索的图名，逗号分隔 |
-| `--data-dir` | `data` | 输入数据目录 |
-| `--top-k` | `100` | 第一阶段选取的高度数节点数 |
-| `--R1` | `1000` | 第一阶段核心搜索的重复次数 |
-| `--R2` | `100` | 第二阶段扩张的重复次数 |
-| `--L` | `200` | 每轮扩张中边界节点的最大考虑数 |
-| `--target-size` | `100` | 目标子图大小 |
-| `--max-steps` | `200` | 每次扩张的最大步数 |
-| `--output-dir` | `matches` | 分组结果输出目录 |
-| `--best-output` | `best_match.csv` | 最佳结果输出文件 |
-
-示例：提高搜索质量（更多重复）但耗时更长：
-
-```bash
-python code.py --R1 2000 --R2 200 --L 300 --target-size 100 --max-steps 500
-```
-
-### 运行扩张工具（可选）
-
-对初步结果进行进一步扩张：
-
-```bash
-python extend_graph_code.py
-```
-
-该工具会读取 `best_match_better5.csv`，进行双层循环随机扩张，并输出结果到 `best_match_best.csv`。
-
-### 校验结果
-
-使用 `check.py` 校验结果中的边一致性：
-
-```bash
-python check.py best_match_best.csv data
-```
-
-**输出含义**：
-- 若输出为 `yes`，表示所有三元组中相同位置的节点对的边模式完全一致，通过校验。
-- 若输出为数字 `n`，表示有 `n` 个不一致的节点；随后列出这些节点的三元组。
-
-### 典型工作流
-
-```bash
-# 1. 运行主程序进行两阶段搜索
-python code.py --graphs a,b,c,d,e --R1 500 --R2 50 --output-dir matches
-
-# 2. 检查结果是否满足要求
-python check.py best_match.csv data
-
-# 3. 如果结果太小，可选择性进一步扩张
-python extend_graph_code.py
-
-# 4. 最终校验
-python check.py best_match_best.csv data
+│   ├── e.csv
+│   ├── banc_626_edge_list.csv    # These are the true input
+│   ├── fafb_783_edge_list.csv
+│   ├── manc_1.2.1_edge_list.csv
+│   ├── maol_1.1_edge_list.csv
+│   └── mcns_0.9_edge_list.csv
+├── matches/
+│   ├── banc_626_edge_list__fafb_783_edge_list__manc_1.2.1_edge_list.csv    # These are the core matching neurons under those three dataset in the filename
+│   ├── banc_626_edge_list__fafb_783_edge_list__maol_1.1_edge_list.csv
+│   ├── banc_626_edge_list__fafb_783_edge_list__mcns_0.9_edge_list.csv
+│   ├── banc_626_edge_list__manc_1.2.1_edge_list__maol_1.1_edge_list.csv
+│   ├── banc_626_edge_list__manc_1.2.1_edge_list__mcns_0.9_edge_list.csv
+│   ├── banc_626_edge_list__maol_1.1_edge_list__mcns_0.9_edge_list.csv
+│   ├── fafb_783_edge_list__manc_1.2.1_edge_list__maol_1.1_edge_list.csv
+│   ├── fafb_783_edge_list__manc_1.2.1_edge_list__mcns_0.9_edge_list.csv
+│   ├── fafb_783_edge_list__maol_1.1_edge_list__mcns_0.9_edge_list.csv
+│   └── manc_1.2.1_edge_list__maol_1.1_edge_list__mcns_0.9_edge_list.csv
+└── README.md
 ```
 
 ---
 
-## 性能与计算复杂度
+## Run Main Search
 
-- **第一阶段**：在 Top-K（≤100）节点的诱导子图上进行搜索，复杂度较低，通常在秒级完成。
-- **第二阶段**：在全图上进行 R2 次多步扩张，复杂度与图大小成正比；通常耗时数分钟到数小时（取决于 R2、L、max_steps 等参数）。
-- **扩张工具**：双层循环，外层约 10000 轮，内层每轮 100 次重启，每次最多 100 步；总耗时可能为小时级。
+```bash
+python code.py
+```
 
-**优化建议**：
-- 在本地小图上测试参数。
-- 根据时间预算调整 R1、R2、L 参数。
-- 扩张工具可在初步结果基础上选择性运行。
+---
 
+## Validate Result
+
+```bash
+python check.py best_match.csv data
+```
+
+A successful validation prints:
+
+```text
+yes
+```
+
+indicating that all matched triplets satisfy edge-consistency constraints.
+
+---
+
+## Optional Post-Expansion
+
+To further enlarge a discovered subgraph:
+
+```bash
+python extend_graph_code.py --data-dir ./data --best-match best_match.csv --output best_match_better1.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better1.csv --output best_match_better2.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better2.csv --output best_match_better3.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better3.csv --output best_match_better4.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better4.csv --output best_match_better5.csv
+python extend_graph_code.py --data-dir ./data --best-match best_match_better5.csv --output best_match_best.csv
+```
+
+This script repeatedly restarts from randomly selected subsets of the current solution and attempts additional greedy expansions.
+
+---
+
+# Computational Complexity
+
+### Stage 1
+
+Search is restricted to Top-100 hub neurons.
+
+This dramatically reduces complexity and typically completes within minutes.
+
+### Stage 2
+
+Expansion cost depends primarily on:
+
+* graph size
+* boundary size
+* number of randomized restarts
+
+Typical runtime ranges from minutes to hours depending on parameter settings.
+
+---
+
+# Summary
+
+The central idea of this work is:
+
+> **First identify a small number of highly reliable aligned hub neurons, then use these anchors to guide expansion toward a large common weakly connected subgraph.**
+
+By exploiting the unique hub structure of biological connectomes, the algorithm searches a dramatically smaller space than generic graph-isomorphism approaches, making large-scale common subgraph discovery computationally practical while still producing biologically plausible alignments.
