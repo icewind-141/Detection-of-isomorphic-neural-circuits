@@ -15,4 +15,4 @@ The circuit's composition points to a role in higher-order visual feature proces
 >References:  
 >[1] Shinomiya K, et al. (2019). Comparisons between the ON- and OFF-edge motion pathways in the Drosophila brain. *eLife*, 8, e40025.  
 >[2] Wu M, et al. (2016). Visual projection neurons in the Drosophila lobula link feature detection to distinct behavioral programs. *eLife*, 5, e21022.  
->[3] Keleş MF, et al. (2017). Object-Detecting Neurons in Drosophila. *Curr biol*, 27(5), 680–687.
+>[3] Keleş MF, et al. (2017). Object-Detecting Neurons in Drosophila. *Curr Biol*, 27(5), 680–687.
